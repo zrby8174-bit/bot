@@ -1,26 +1,31 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, Integer, String, DateTime
-import datetime
+from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
 
-# الرابط يقرأ من إعدادات Render تلقائياً
+# تحميل المتغيرات من ملف .env
+load_dotenv()
+
+# الرابط المعدل ليعمل مع asyncpg
+# ملاحظة: تأكد أنك وضعت الرابط الصحيح في إعدادات Render باسم DATABASE_URL
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# التأكد من إضافة +asyncpg للرابط إذا لم تكن موجودة
+if DATABASE_URL and not DATABASE_URL.startswith("postgresql+asyncpg"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+
+# إنشاء محرك قاعدة البيانات المتزامن
 engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+# إنشاء جلسة للتعامل مع قاعدة البيانات
+AsyncSessionLocal = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
+
 Base = declarative_base()
 
-# جدول الأرشفة لحفظ المنشورات
-class MessageArchive(Base):
-    __tablename__ = 'message_archive'
-    id = Column(Integer, primary_key=True)
-    college_name = Column(String)  # اسم الكلية
-    message_type = Column(String)  # نوع المنشور (صورة، ملف، نص)
-    message_id = Column(Integer)   # معرف الرسالة
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+# دالة للحصول على جلسة قاعدة البيانات
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
 
-# إنشاء الجداول عند تشغيل البوت
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
